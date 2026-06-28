@@ -107,19 +107,12 @@ export default function KitchenPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {orders.map(order => (
-            <div
-              key={order.id}
-              className={`rounded-xl p-4 ${order.status === 'preparing' ? 'bg-yellow-800' : 'bg-gray-800'}`}
-            >
+              <div key={order.id} className="rounded-xl p-4 bg-gray-800">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h2 className="text-xl font-bold">Table {order.table_number}</h2>
-                  <p className="text-gray-400 text-sm">{order.customer_name}</p>
+                <h2 className="text-xl font-bold">{order.customer_name}</h2>
                 </div>
                 <div className="text-right">
-                  <span className={`text-xs px-2 py-1 rounded-full ${order.status === 'preparing' ? 'bg-yellow-500 text-black' : 'bg-blue-500'}`}>
-                    {order.status}
-                  </span>
                   <p className="text-gray-400 text-xs mt-1">
                     {new Date(order.created_at).toLocaleTimeString()}
                   </p>
@@ -140,14 +133,6 @@ export default function KitchenPage() {
               </div>
 
               <div className="flex gap-2">
-                {order.status === 'pending' && (
-                  <button
-                    onClick={() => markPreparing(order.id)}
-                    className="flex-1 bg-yellow-500 text-black py-2 rounded-lg font-bold"
-                  >
-                    Preparing
-                  </button>
-                )}
                 <button
                   onClick={() => markComplete(order.id)}
                   className="flex-1 bg-green-500 text-black py-2 rounded-lg font-bold"
