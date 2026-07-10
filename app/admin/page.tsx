@@ -1,7 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Bebas_Neue, Inter } from 'next/font/google'
 import { supabase } from '@/lib/supabase'
+
+const bebasNeue = Bebas_Neue({ subsets: ['latin'], weight: '400' })
+const inter = Inter({ subsets: ['latin'] })
 
 type Addon = {
   label: string
@@ -161,9 +165,9 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f0f0f0' }}>
+      <div className={`${inter.className} min-h-screen flex items-center justify-center p-4`} style={{ backgroundColor: '#f0f0f0' }}>
         <div className="bg-white rounded-xl shadow-sm p-8 w-full max-w-sm">
-          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2rem', color: '#7E0923', textAlign: 'center' }}>
+          <h1 className={bebasNeue.className} style={{ fontSize: '2rem', color: '#7E0923', textAlign: 'center' }}>
             Admin Login
           </h1>
           <input
@@ -191,13 +195,14 @@ export default function AdminPage() {
 
 
   return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: '#f0f0f0', fontFamily: "'Inter', sans-serif" }}>
-      <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', color: '#7E0923' }}>
-        Menu Admin
-      </h1>
+    <div className={`${inter.className} min-h-screen px-4 py-6 sm:px-6`} style={{ backgroundColor: '#f0f0f0' }}>
+      <div className="w-full max-w-lg mx-auto">
+        <h1 className={bebasNeue.className} style={{ fontSize: '2.5rem', color: '#7E0923', textAlign: 'center' }}>
+          Menu Admin
+        </h1>
 
-      {/* Add new item */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-8 max-w-lg">
+        {/* Add new item */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-8">
         <h2 className="font-semibold mb-3" style={{ color: '#2a2e30' }}>Add New Item</h2>
         <input
           className="w-full border rounded-lg p-2 mb-2 outline-none"
@@ -250,10 +255,10 @@ export default function AdminPage() {
         >
           {adding ? 'Adding...' : 'Add Item'}
         </button>
-      </div>
+        </div>
 
-      {/* Current menu items */}
-      <div className="max-w-lg">
+        {/* Current menu items */}
+        <div>
         <h2 className="font-semibold mb-3" style={{ color: '#2a2e30' }}>Current Menu</h2>
         <div className="space-y-3">
           {menuItems.map(item => (
@@ -358,6 +363,7 @@ export default function AdminPage() {
               )}
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>
