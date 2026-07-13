@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import {
+  HOURS_OF_OPERATION,
+  RESTAURANT_SETTINGS_ID,
+  type RestaurantSettings,
+} from '@/lib/restaurant'
 
 type Addon = {
   label: string
@@ -30,12 +35,52 @@ type CartItem = {
 
 const CATEGORY_ORDER = ['Specials', 'Mains', 'Snacks', 'Drinks']
 
+function HoursDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="hours-title">
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <h2 id="hours-title" className="text-xl font-semibold">Hours of Operation</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 w-8 rounded-full text-xl leading-none"
+            aria-label="Close hours"
+            style={{ backgroundColor: '#f0e8e5', color: '#2a2e30' }}
+          >
+            ×
+          </button>
+        </div>
+        <div className="mt-5 divide-y" style={{ borderColor: '#d9cdc9' }}>
+          {HOURS_OF_OPERATION.map(({ days, hours }) => (
+            <div key={days} className="flex justify-between gap-4 py-3 text-sm">
+              <span className="font-medium">{days}</span>
+              <span className="text-right" style={{ color: '#7a7a7a' }}>{hours}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full rounded-lg py-2 font-semibold text-white"
+          style={{ backgroundColor: '#2a2e30' }}
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function OrderPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [customerName, setCustomerName] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [restaurantOpen, setRestaurantOpen] = useState<boolean | null>(null)
+  const [showHours, setShowHours] = useState(false)
+  const [viewClosedMenu, setViewClosedMenu] = useState(false)
 
   useEffect(() => {
     const link = document.createElement('link')
@@ -50,7 +95,42 @@ export default function OrderPage() {
         .eq('is_available', true)
       if (data) setMenuItems(data)
     }
+
+    const fetchRestaurantStatus = async () => {
+      const { data, error } = await supabase
+        .from('restaurant_settings')
+        .select('is_open')
+        .eq('id', RESTAURANT_SETTINGS_ID)
+        .single()
+
+      setRestaurantOpen(error ? false : data.is_open)
+    }
+
     fetchMenu()
+    fetchRestaurantStatus()
+
+    const settingsChannel = supabase
+      .channel('restaurant-settings-order')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'restaurant_settings',
+        filter: `id=eq.${RESTAURANT_SETTINGS_ID}`
+      }, (payload) => {
+        const settings = payload.new as RestaurantSettings
+        setRestaurantOpen(settings.is_open)
+        if (!settings.is_open) {
+          setCart([])
+        } else {
+          setViewClosedMenu(false)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(settingsChannel)
+      document.head.removeChild(link)
+    }
   }, [])
 
   const addToCart = (item: MenuItem) => {
@@ -107,14 +187,29 @@ export default function OrderPage() {
   const categories = CATEGORY_ORDER.filter(cat => menuItems.some(item => item.category === cat))
 
   const submitOrder = async () => {
-    if (!customerName || cart.length === 0) return
+    if (!customerName || cart.length === 0 || !restaurantOpen) return
     setLoading(true)
-    await supabase.from('orders').insert({
+
+    const { data: settings, error: settingsError } = await supabase
+      .from('restaurant_settings')
+      .select('is_open')
+      .eq('id', RESTAURANT_SETTINGS_ID)
+      .single()
+
+    if (settingsError || !settings.is_open) {
+      setRestaurantOpen(false)
+      setCart([])
+      setLoading(false)
+      return
+    }
+
+    const { error } = await supabase.from('orders').insert({
       customer_name: customerName,
       items: cart,
       status: 'pending'
     })
-    setSubmitted(true)
+
+    if (!error) setSubmitted(true)
     setLoading(false)
   }
 
@@ -144,28 +239,108 @@ export default function OrderPage() {
     )
   }
 
+  if (restaurantOpen === null || (restaurantOpen === false && !viewClosedMenu)) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{ backgroundColor: '#f0f0f0', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
+      >
+        <div className="p-4 shadow-sm">
+          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', textAlign: 'center', color: '#7E0923' }}>
+            The Cove
+          </h1>
+        </div>
+        <main className="mx-auto flex max-w-lg items-center justify-center px-4 py-16">
+          <div className="w-full rounded-xl bg-white p-6 text-center shadow-sm">
+            {restaurantOpen === null ? (
+              <>
+                <h2 className="text-xl font-semibold">Checking restaurant status...</h2>
+                <p className="mt-2 text-sm" style={{ color: '#7a7a7a' }}>This will only take a moment.</p>
+              </>
+            ) : (
+              <>
+                <p className="mx-auto mb-4 h-3 w-3 rounded-full bg-red-600" aria-hidden="true" />
+                <h2 className="text-2xl font-semibold">We are currently closed</h2>
+                <p className="mt-2" style={{ color: '#7a7a7a' }}>
+                  Ordering will be available when the kitchen opens the restaurant.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowHours(true)}
+                  className="mt-6 w-full rounded-lg py-3 font-semibold text-white"
+                  style={{ backgroundColor: '#2a2e30' }}
+                >
+                  View Hours
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewClosedMenu(true)}
+                  className="mt-3 w-full rounded-lg border py-3 font-semibold"
+                  style={{ borderColor: '#2a2e30', color: '#2a2e30' }}
+                >
+                  View Menu
+                </button>
+              </>
+            )}
+          </div>
+        </main>
+        {showHours && <HoursDialog onClose={() => setShowHours(false)} />}
+      </div>
+    )
+  }
+
   return (
     <div
-      className="min-h-screen pb-48"
+      className={`min-h-screen ${restaurantOpen ? 'pb-48' : 'pb-12'}`}
       style={{ backgroundColor: '#f0f0f0', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
     >
       <div className="shadow-sm p-4 sticky top-0 z-10" style={{ backgroundColor: '#f0f0f0' }}>
         <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', textAlign: 'center', color: '#7E0923' }}>
           The Cove
         </h1>
+        <p className={`text-center text-xs font-semibold uppercase ${restaurantOpen ? 'text-green-700' : 'text-red-700'}`}>
+          {restaurantOpen ? 'Open for orders' : 'Closed - menu preview'}
+        </p>
       </div>
 
       <div className="max-w-lg mx-auto p-4">
-        <div className="rounded-xl shadow-sm p-4 mb-6" style={{ backgroundColor: '#fff' }}>
-          <h2 className="font-semibold mb-3" style={{ color: '#2a2e30' }}>Welcome!</h2>
-          <input
-            className="w-full border rounded-lg p-2 outline-none"
-            placeholder="Your name"
-            value={customerName}
-            onChange={e => setCustomerName(e.target.value)}
-            style={{ color: '#2a2e30', borderColor: '#d9cdc9' }}
-          />
-        </div>
+        {restaurantOpen ? (
+          <div className="rounded-xl shadow-sm p-4 mb-6" style={{ backgroundColor: '#fff' }}>
+            <h2 className="font-semibold mb-3" style={{ color: '#2a2e30' }}>Welcome!</h2>
+            <input
+              className="w-full border rounded-lg p-2 outline-none"
+              placeholder="Your name"
+              value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              style={{ color: '#2a2e30', borderColor: '#d9cdc9' }}
+            />
+          </div>
+        ) : (
+          <div className="mb-6 rounded-xl border p-4" style={{ backgroundColor: '#fff', borderColor: '#d9cdc9' }}>
+            <h2 className="font-semibold">Ordering is currently closed</h2>
+            <p className="mt-1 text-sm" style={{ color: '#7a7a7a' }}>
+              You can browse the menu, but items cannot be added until the kitchen opens.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setViewClosedMenu(false)}
+                className="flex-1 rounded-lg border py-2 font-semibold"
+                style={{ borderColor: '#2a2e30', color: '#2a2e30' }}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHours(true)}
+                className="flex-1 rounded-lg py-2 font-semibold text-white"
+                style={{ backgroundColor: '#2a2e30' }}
+              >
+                View Hours
+              </button>
+            </div>
+          </div>
+        )}
 
         {categories.map(category => (
           <div key={category} className="mb-6">
@@ -188,7 +363,7 @@ export default function OrderPage() {
                         <p className="text-sm mt-0.5" style={{ color: '#7a7a7a' }}>{item.description}</p>
                         <p className="font-medium mt-1" style={{ color: '#2a2e30' }}>${item.price.toFixed(2)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      {restaurantOpen && <div className="flex items-center gap-2">
                         {cartItem ? (
                           <>
                             <button
@@ -210,7 +385,7 @@ export default function OrderPage() {
                             style={{ backgroundColor: '#2a2e30' }}
                           >+</button>
                         )}
-                      </div>
+                      </div>}
                     </div>
 
                     {cartItem && oneAddons.length > 0 && (
@@ -269,7 +444,7 @@ export default function OrderPage() {
         ))}
       </div>
 
-      {cart.length > 0 && (
+      {restaurantOpen && cart.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 border-t shadow-lg p-4" style={{ backgroundColor: '#f0f0f0', borderColor: '#d9cdc9' }}>
           <div className="max-w-lg mx-auto">
             <div className="flex justify-between mb-3">
@@ -287,6 +462,7 @@ export default function OrderPage() {
           </div>
         </div>
       )}
+      {showHours && <HoursDialog onClose={() => setShowHours(false)} />}
     </div>
   )
 }

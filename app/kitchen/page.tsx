@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { RESTAURANT_SETTINGS_ID, type RestaurantSettings } from '@/lib/restaurant'
+
+const KITCHEN_PASSWORD = 'smugskitchen'
 
 type CartItem = {
   id: string
@@ -21,9 +24,24 @@ type Order = {
 }
 
 export default function KitchenPage() {
+  const [authed, setAuthed] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [loginError, setLoginError] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [connected, setConnected] = useState(true)
+  const [restaurantOpen, setRestaurantOpen] = useState<boolean | null>(null)
+  const [statusSaving, setStatusSaving] = useState(false)
+  const [statusError, setStatusError] = useState('')
   const audioRef = useRef<AudioContext | null>(null)
+
+  const handleLogin = () => {
+    if (passwordInput === KITCHEN_PASSWORD) {
+      setAuthed(true)
+      setLoginError('')
+    } else {
+      setLoginError('Incorrect password')
+    }
+  }
 
   const playDing = () => {
     try {
@@ -59,10 +77,51 @@ export default function KitchenPage() {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'preparing' } : o))
   }
 
-  useEffect(() => {
-    fetchPendingOrders()
+  const fetchRestaurantStatus = async () => {
+    const { data, error } = await supabase
+      .from('restaurant_settings')
+      .select('is_open')
+      .eq('id', RESTAURANT_SETTINGS_ID)
+      .single()
 
-    const channel = supabase
+    if (error) {
+      setRestaurantOpen(false)
+      setStatusError('Restaurant status is unavailable. Run the database migration.')
+      return
+    }
+
+    setRestaurantOpen(data.is_open)
+    setStatusError('')
+  }
+
+  const toggleRestaurantStatus = async () => {
+    if (restaurantOpen === null || statusSaving) return
+
+    setStatusSaving(true)
+    setStatusError('')
+
+    const nextStatus = !restaurantOpen
+    const { error } = await supabase
+      .from('restaurant_settings')
+      .update({ is_open: nextStatus, updated_at: new Date().toISOString() })
+      .eq('id', RESTAURANT_SETTINGS_ID)
+
+    if (error) {
+      setStatusError('Could not update the restaurant status. Please try again.')
+    } else {
+      setRestaurantOpen(nextStatus)
+    }
+
+    setStatusSaving(false)
+  }
+
+  useEffect(() => {
+    if (!authed) return
+
+    fetchPendingOrders()
+    fetchRestaurantStatus()
+
+    const ordersChannel = supabase
       .channel('orders-channel')
       .on('postgres_changes', {
         event: 'INSERT',
@@ -76,6 +135,20 @@ export default function KitchenPage() {
         setConnected(status === 'SUBSCRIBED')
       })
 
+    const settingsChannel = supabase
+      .channel('restaurant-settings-kitchen')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'restaurant_settings',
+        filter: `id=eq.${RESTAURANT_SETTINGS_ID}`
+      }, (payload) => {
+        const settings = payload.new as RestaurantSettings
+        setRestaurantOpen(settings.is_open)
+        setStatusError('')
+      })
+      .subscribe()
+
     // Reconnect when tab becomes visible again
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -85,19 +158,76 @@ export default function KitchenPage() {
     document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(ordersChannel)
+      supabase.removeChannel(settingsChannel)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [])
+  }, [authed])
+
+  if (!authed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-900 p-4 text-white">
+        <div className="w-full max-w-sm rounded-lg bg-gray-800 p-8 shadow-xl">
+          <h1 className="text-center text-3xl font-bold">Kitchen Login</h1>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={event => setPasswordInput(event.target.value)}
+            onKeyDown={event => event.key === 'Enter' && handleLogin()}
+            placeholder="Password"
+            autoFocus
+            className="mt-6 w-full rounded-lg border border-gray-600 bg-gray-900 p-3 text-white outline-none focus:border-green-500"
+          />
+          {loginError && <p className="mt-2 text-sm text-red-400">{loginError}</p>}
+          <button
+            type="button"
+            onClick={handleLogin}
+            className="mt-4 w-full rounded-lg bg-green-500 py-3 font-bold text-black"
+          >
+            Enter Kitchen
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Kitchen Dashboard</h1>
-        <span className={`text-sm px-3 py-1 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}>
-          {connected ? '🟢 Live' : '🔴 Reconnecting...'}
-        </span>
+      <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Kitchen Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            Ordering is {restaurantOpen ? 'open' : 'closed'} for customers.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`text-sm px-3 py-1 rounded-full ${connected ? 'bg-green-500 text-black' : 'bg-red-500'}`}>
+            {connected ? 'Live' : 'Reconnecting...'}
+          </span>
+          <button
+            type="button"
+            onClick={toggleRestaurantStatus}
+            disabled={restaurantOpen === null || statusSaving}
+            className={`min-w-48 px-5 py-3 rounded-lg font-bold disabled:cursor-not-allowed disabled:opacity-50 ${
+              restaurantOpen
+                ? 'bg-red-500 text-white'
+                : 'bg-green-500 text-black'
+            }`}
+          >
+            {statusSaving
+              ? 'Updating...'
+              : restaurantOpen
+                ? 'Close Restaurant'
+                : 'Open Restaurant'}
+          </button>
+        </div>
       </div>
+
+      {statusError && (
+        <p className="mb-6 rounded-lg border border-red-500 bg-red-950 p-3 text-sm text-red-200">
+          {statusError}
+        </p>
+      )}
 
       {orders.length === 0 ? (
         <div className="text-center text-gray-500 mt-20">
