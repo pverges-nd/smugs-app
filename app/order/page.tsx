@@ -26,6 +26,7 @@ type MenuItem = {
 
 type CartItem = {
   id: string
+  menuItemId: string
   name: string
   price: number
   qty: number
@@ -135,11 +136,20 @@ export default function OrderPage() {
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
-      const existing = prev.find(c => c.id === item.id)
-      if (existing) {
+      const hasOptions = (item.addons?.length ?? 0) > 0
+      const existing = prev.find(c => c.menuItemId === item.id)
+      if (existing && !hasOptions) {
         return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
       }
-      return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, note: '', addons: [] }]
+      return [...prev, {
+        id: hasOptions ? crypto.randomUUID() : item.id,
+        menuItemId: item.id,
+        name: item.name,
+        price: item.price,
+        qty: 1,
+        note: '',
+        addons: []
+      }]
     })
   }
 
@@ -352,9 +362,11 @@ export default function OrderPage() {
             </h2>
             <div className="space-y-3">
               {menuItems.filter(i => i.category === category).map(item => {
-                const cartItem = cart.find(c => c.id === item.id)
+                const cartItems = cart.filter(c => c.menuItemId === item.id)
+                const cartItem = cartItems[0]
                 const manyAddons = item.addons?.filter(a => a.type === 'many') ?? []
                 const oneAddons = item.addons?.filter(a => a.type === 'one') ?? []
+                const hasOptions = manyAddons.length > 0 || oneAddons.length > 0
                 return (
                   <div key={item.id} className="rounded-xl shadow-sm p-4" style={{ backgroundColor: '#fff' }}>
                     <div className="flex justify-between items-start">
@@ -364,7 +376,7 @@ export default function OrderPage() {
                         <p className="font-medium mt-1" style={{ color: '#2a2e30' }}>${item.price.toFixed(2)}</p>
                       </div>
                       {restaurantOpen && <div className="flex items-center gap-2">
-                        {cartItem ? (
+                        {cartItem && !hasOptions ? (
                           <>
                             <button
                               onClick={() => removeFromCart(item.id)}
@@ -388,46 +400,67 @@ export default function OrderPage() {
                       </div>}
                     </div>
 
-                    {cartItem && oneAddons.length > 0 && (
-                      <div className="mt-3 pt-3 border-t" style={{ borderColor: '#f0e8e5' }}>
-                        <p className="text-sm font-medium mb-2" style={{ color: '#2a2e30' }}>Pick one:</p>
-                        {oneAddons.map(addon => (
-                          <label key={addon.label} className="flex items-center gap-2 mb-1 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`one-${item.id}`}
-                              checked={cartItem.addons.includes(addon.label)}
-                              onChange={() => selectOneAddon(item.id, addon.label, addon.price, item.addons)}
-                            />
-                            <span className="text-sm" style={{ color: '#2a2e30' }}>
-                              {addon.label}
-                              {addon.price > 0 && <span style={{ color: '#7a7a7a' }}> +${addon.price.toFixed(2)}</span>}
-                            </span>
-                          </label>
-                        ))}
+                    {cartItems.map((cartLine, index) => hasOptions && (
+                      <div key={cartLine.id} className="mt-3 rounded-lg border p-3" style={{ borderColor: '#d9cdc9' }}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-sm font-semibold">{item.name} #{index + 1}</p>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(cartLine.id)}
+                            className="text-sm font-semibold"
+                            style={{ color: '#7E0923' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        {oneAddons.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-sm font-medium">Pick one:</p>
+                            {oneAddons.map(addon => (
+                              <label key={addon.label} className="mb-1 flex cursor-pointer items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`one-${cartLine.id}`}
+                                  checked={cartLine.addons.includes(addon.label)}
+                                  onChange={() => selectOneAddon(cartLine.id, addon.label, addon.price, item.addons)}
+                                />
+                                <span className="text-sm">
+                                  {addon.label}
+                                  {addon.price > 0 && <span style={{ color: '#7a7a7a' }}> +${addon.price.toFixed(2)}</span>}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {manyAddons.length > 0 && (
+                          <div className={oneAddons.length > 0 ? 'mt-3' : ''}>
+                            <p className="mb-2 text-sm font-medium">Add-ons:</p>
+                            {manyAddons.map(addon => (
+                              <label key={addon.label} className="mb-1 flex cursor-pointer items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={cartLine.addons.includes(addon.label)}
+                                  onChange={() => toggleManyAddon(cartLine.id, addon.label, addon.price)}
+                                />
+                                <span className="text-sm">
+                                  {addon.label}
+                                  {addon.price > 0 && <span style={{ color: '#7a7a7a' }}> +${addon.price.toFixed(2)}</span>}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <input
+                          className="mt-3 w-full rounded-lg border p-2 text-sm outline-none"
+                          placeholder="Special instructions (optional)"
+                          value={cartLine.note}
+                          onChange={e => updateNote(cartLine.id, e.target.value)}
+                          style={{ borderColor: '#d9cdc9', color: '#2a2e30' }}
+                        />
                       </div>
-                    )}
+                    ))}
 
-                    {cartItem && manyAddons.length > 0 && (
-                      <div className="mt-3 pt-3 border-t" style={{ borderColor: '#f0e8e5' }}>
-                        <p className="text-sm font-medium mb-2" style={{ color: '#2a2e30' }}>Add-ons:</p>
-                        {manyAddons.map(addon => (
-                          <label key={addon.label} className="flex items-center gap-2 mb-1 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={cartItem.addons.includes(addon.label)}
-                              onChange={() => toggleManyAddon(item.id, addon.label, addon.price)}
-                            />
-                            <span className="text-sm" style={{ color: '#2a2e30' }}>
-                              {addon.label}
-                              {addon.price > 0 && <span style={{ color: '#7a7a7a' }}> +${addon.price.toFixed(2)}</span>}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-
-                    {cartItem && (
+                    {cartItem && !hasOptions && (
                       <input
                         className="w-full border rounded-lg p-2 mt-3 text-sm outline-none"
                         placeholder="Special instructions (optional)"
@@ -435,6 +468,17 @@ export default function OrderPage() {
                         onChange={e => updateNote(item.id, e.target.value)}
                         style={{ borderColor: '#d9cdc9', color: '#2a2e30' }}
                       />
+                    )}
+
+                    {restaurantOpen && hasOptions && cartItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        className="mt-3 w-full rounded-lg border py-2 text-sm font-semibold"
+                        style={{ borderColor: '#2a2e30', color: '#2a2e30' }}
+                      >
+                        + Add another {item.name}
+                      </button>
                     )}
                   </div>
                 )
