@@ -8,6 +8,7 @@ const KITCHEN_PASSWORD = 'smugskitchen'
 
 type CartItem = {
   id: string
+  menuItemId?: string
   name: string
   price: number
   qty: number
@@ -22,6 +23,23 @@ type Order = {
   table_number: string
   items: CartItem[]
   status: string
+}
+
+function groupOrderItems(items: CartItem[]) {
+  const groups = new Map<string, { name: string; qty: number; lines: CartItem[] }>()
+
+  for (const item of items) {
+    const key = item.menuItemId ?? item.id
+    const group = groups.get(key)
+    if (group) {
+      group.qty += item.qty
+      group.lines.push(item)
+    } else {
+      groups.set(key, { name: item.name, qty: item.qty, lines: [item] })
+    }
+  }
+
+  return groups
 }
 
 export default function KitchenPage() {
@@ -251,19 +269,27 @@ export default function KitchenPage() {
               </div>
 
               <div className="space-y-2 mb-4">
-                {order.items.map((item, i) => (
-                  <div key={i} className="border-b border-gray-700 pb-2">
-                    <div className="flex justify-between">
-                      <span className="font-medium">{item.qty}x {item.name}</span>
-                    </div>
-                    {!!item.addons?.length && (
-                      <p className="mt-1 text-sm font-medium text-gray-200">{item.addons.join(', ')}</p>
-                    )}
-                    {item.note && (
-                      <p className="text-yellow-400 text-sm mt-1">⚠️ {item.note}</p>
-                    )}
+                {Array.from(groupOrderItems(order.items), ([key, group]) => (
+                  <div key={key} className="border-b border-gray-700 pb-2">
+                    <p className="font-medium">{group.qty}x {group.name}</p>
+                    {group.lines.map((line, index) => {
+                      const options = line.addons?.join(', ')
+                      if (group.lines.length === 1 && !options && !line.note) return null
+
+                      return (
+                        <p key={index} className="mt-1 pl-3 text-sm text-gray-200">
+                          {group.lines.length > 1 && <span>{line.qty}x </span>}
+                          {options || (group.lines.length > 1 && 'No options')}
+                          {line.note && <span className="text-yellow-400"> ⚠️ {line.note}</span>}
+                        </p>
+                      )
+                    })}
                   </div>
                 ))}
+                <div className="flex justify-between pt-1 font-bold">
+                  <span>Total</span>
+                  <span>${order.items.reduce((sum, item) => sum + item.price * item.qty, 0).toFixed(2)}</span>
+                </div>
               </div>
 
               <div className="flex gap-2">
