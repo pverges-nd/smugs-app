@@ -12,6 +12,7 @@ type CartItem = {
   price: number
   qty: number
   note: string
+  addons?: string[]
 }
 
 type Order = {
@@ -255,6 +256,9 @@ export default function KitchenPage() {
                     <div className="flex justify-between">
                       <span className="font-medium">{item.qty}x {item.name}</span>
                     </div>
+                    {!!item.addons?.length && (
+                      <p className="mt-1 text-sm font-medium text-gray-200">{item.addons.join(', ')}</p>
+                    )}
                     {item.note && (
                       <p className="text-yellow-400 text-sm mt-1">⚠️ {item.note}</p>
                     )}
