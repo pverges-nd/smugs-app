@@ -36,6 +36,24 @@ type CartItem = {
 
 const CATEGORY_ORDER = ['Specials', 'Mains', 'Snacks', 'Drinks']
 
+function ChristmasHeader({ restaurantOpen }: { restaurantOpen?: boolean }) {
+  return (
+    <header className="border-b-4 border-[#a6263d] bg-linear-to-br from-[#102e25] to-[#21513e] px-4 py-3 text-center text-white shadow-sm">
+      <div className="flex items-center justify-center gap-4">
+        <span aria-hidden="true" className="text-xl text-[#f3d89c]">❄</span>
+        <h1 className="text-[2.5rem] leading-tight" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>The Cove</h1>
+        <span aria-hidden="true" className="text-xl text-[#f3d89c]">❄</span>
+      </div>
+      <p className="text-xs font-semibold uppercase tracking-widest text-[#f3d89c]">Merry Christmas</p>
+      {restaurantOpen !== undefined && (
+        <p className="mt-2 text-xs font-semibold uppercase">
+          {restaurantOpen ? 'Open for orders' : 'Closed - menu preview'}
+        </p>
+      )}
+    </header>
+  )
+}
+
 function HoursDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="hours-title">
@@ -227,12 +245,13 @@ export default function OrderPage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: '#f0f0f0', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
+        style={{ backgroundColor: '#f7f4eb', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
       >
         <div className="text-center p-8">
           <img src="/tj_groden_csc.jpg" alt="success" className="w-32 h-32 rounded-full object-cover mx-auto mb-4" />
           <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', color: '#7E0923' }}>Order Placed!</h1>
           <p className="mt-2" style={{ color: '#2a2e30' }}>Thank you!</p>
+          <p className="mt-2 font-semibold text-[#21513e]">Merry Christmas from The Cove!</p>
           <button
             onClick={() => {
               setSubmitted(false)
@@ -253,13 +272,9 @@ export default function OrderPage() {
     return (
       <div
         className="min-h-screen"
-        style={{ backgroundColor: '#f0f0f0', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
+        style={{ backgroundColor: '#f7f4eb', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
       >
-        <div className="p-4 shadow-sm">
-          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', textAlign: 'center', color: '#7E0923' }}>
-            The Cove
-          </h1>
-        </div>
+        <ChristmasHeader />
         <main className="mx-auto flex max-w-lg items-center justify-center px-4 py-16">
           <div className="w-full rounded-xl bg-white p-6 text-center shadow-sm">
             {restaurantOpen === null ? (
@@ -302,15 +317,10 @@ export default function OrderPage() {
   return (
     <div
       className={`min-h-screen ${restaurantOpen ? 'pb-48' : 'pb-12'}`}
-      style={{ backgroundColor: '#f0f0f0', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
+      style={{ backgroundColor: '#f7f4eb', color: '#2a2e30', fontFamily: "'Inter', sans-serif" }}
     >
-      <div className="shadow-sm p-4 sticky top-0 z-10" style={{ backgroundColor: '#f0f0f0' }}>
-        <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', textAlign: 'center', color: '#7E0923' }}>
-          The Cove
-        </h1>
-        <p className={`text-center text-xs font-semibold uppercase ${restaurantOpen ? 'text-green-700' : 'text-red-700'}`}>
-          {restaurantOpen ? 'Open for orders' : 'Closed - menu preview'}
-        </p>
+      <div className="sticky top-0 z-10">
+        <ChristmasHeader restaurantOpen={restaurantOpen} />
       </div>
 
       <div className="max-w-lg mx-auto p-4">
@@ -489,7 +499,7 @@ export default function OrderPage() {
       </div>
 
       {restaurantOpen && cart.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 border-t shadow-lg p-4" style={{ backgroundColor: '#f0f0f0', borderColor: '#d9cdc9' }}>
+        <div className="fixed bottom-0 left-0 right-0 border-t shadow-lg p-4" style={{ backgroundColor: '#f7f4eb', borderColor: '#d9cdc9' }}>
           <div className="max-w-lg mx-auto">
             <div className="flex justify-between mb-3">
               <span className="font-semibold" style={{ color: '#2a2e30' }}>Total</span>
@@ -499,7 +509,7 @@ export default function OrderPage() {
               onClick={submitOrder}
               disabled={loading || !customerName}
               className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-50"
-              style={{ backgroundColor: '#2a2e30', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.25rem' }}
+              style={{ backgroundColor: '#21513e', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.25rem' }}
             >
               {loading ? 'Placing Order...' : 'Place Order'}
             </button>
